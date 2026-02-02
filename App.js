@@ -133,16 +133,24 @@ export default function App() {
     try {
       // Capture the photo container with stickers
       const uri = await captureRef(photoContainerRef, {
-        format: 'png',
-        quality: 1,
+        format: 'jpg',
+        quality: 0.9,
       });
 
-      // Use createAssetAsync which only needs write permission
-      const asset = await MediaLibrary.createAssetAsync(uri);
+      // Save using the simple createAssetAsync API
+      // This will automatically request permission on first use
+      await MediaLibrary.createAssetAsync(uri);
+      
       Alert.alert('Success!', 'Photo saved to gallery! 🎉');
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Error', `Failed to save photo: ${error.message}`);
+      
+      // Check if it's a permission error
+      if (error.message && error.message.includes('permission')) {
+        Alert.alert('Permission Needed', 'Please grant photo library permission in your device settings to save photos.');
+      } else {
+        Alert.alert('Error', `Failed to save photo: ${error.message}`);
+      }
     }
   };
 
