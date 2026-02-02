@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, Image, Dimensions, Animated, PanResponder } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, Image, Dimensions, Animated, PanResponder, TextInput, Modal } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
+import * as ImagePicker from 'expo-image-picker';
 import { captureRef } from 'react-native-view-shot';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -56,18 +57,43 @@ const DraggableSticker = ({ sticker, onMove, onDelete }) => {
 };
 
 export default function App() {
-  const [clickCount, setClickCount] = useState(0);
+  const [userName, setUserName] = useState('');
+  const [nameInput, setNameInput] = useState('');
+  const [showNameModal, setShowNameModal] = useState(true);
+  const [selectedIcon, setSelectedIcon] = useState('🦷');
   const [cameraActive, setCameraActive] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [stickers, setStickers] = useState([]);
+  const [profilePicture, setProfilePicture] = useState(null);
   const cameraRef = useRef(null);
   const photoContainerRef = useRef(null);
 
-  const availableStickers = ['😀', '😎', '🦷', '⭐', '❤️', '🎉', '🔥', '✨', '🌈', '🦄'];
+  const availableIcons = [
+    { emoji: '🦷', name: 'Tooth' },
+    { emoji: '💩', name: 'Poo' },
+    { emoji: '🐱', name: 'Cat' },
+    { emoji: '🦄', name: 'Unicorn' },
+    { emoji: '🦖', name: 'Dinosaur' },
+  ];
 
-  const handlePress = () => {
-    setClickCount(clickCount + 1);
+  const availableStickers = ['😀', '😎', '🦷', '⭐', '❤️', '🎉', '🔥', '✨', '🌈', '🦄', '🐱'];
+
+  const handleNameSubmit = () => {
+    if (nameInput.trim()) {
+      setUserName(nameInput.trim());
+      setShowNameModal(false);
+    } else {
+      Alert.alert('Name Required', 'Please enter your name to continue.');
+    }
+  };
+
+  const showInstructions = () => {
+    Alert.alert(
+      '📱 App Instructions',
+      '\n👤 Profile Picture:\nTap the circle at the top to choose a profile picture from your gallery.\n\n📷 Camera:\nTap "Open Camera" to take a selfie!\n\n✨ Stickers:\nAfter taking a photo, add fun stickers by tapping them. Drag stickers to move them around. Long press to delete a sticker.\n\n💾 Save:\nTap "Save" to save your decorated photo to your gallery.\n\nHave fun! 🎉',
+      [{ text: 'Got it!', style: 'default' }]
+    );
   };
 
   const toggleCamera = async () => {
@@ -129,34 +155,91 @@ export default function App() {
     setStickers([]);
   };
 
+  const pickProfilePicture = async () => {
+    try {
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please grant photo library access to choose a profile picture.');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setProfilePicture(result.assets[0].uri);
+        Alert.alert('Success!', 'Profile picture updated! 👤');
+      }
+    } catch (error) {
+      console.error('Pick image error:', error);
+      Alert.alert('Error', `Failed to pick image: ${error.message}`);
+    }
+  };
+
   const saveToGallery = async () => {
     try {
+      // Request media library permission first
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please grant photo library permission to save photos.');
+        return;
+      }
+
       // Capture the photo container with stickers
       const uri = await captureRef(photoContainerRef, {
         format: 'jpg',
         quality: 0.9,
       });
 
-      // Save using the simple createAssetAsync API
-      // This will automatically request permission on first use
+      // Save to media library
       await MediaLibrary.createAssetAsync(uri);
       
       Alert.alert('Success!', 'Photo saved to gallery! 🎉');
     } catch (error) {
       console.error('Save error:', error);
-      
-      // Check if it's a permission error
-      if (error.message && error.message.includes('permission')) {
-        Alert.alert('Permission Needed', 'Please grant photo library permission in your device settings to save photos.');
-      } else {
-        Alert.alert('Error', `Failed to save photo: ${error.message}`);
-      }
+      Alert.alert('Error', `Failed to save photo: ${error.message}`);
     }
   };
 
   return (
     <View style={styles.container}>
       <StatusBar style="auto" />
+      
+      {/* Name Input Modal */}
+      <Modal
+        visible={showNameModal}
+        animationType="fade"
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🦷 Welcome! 🦷</Text>
+            <Text style={styles.modalSubtitle}>What's your name?</Text>
+            
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Enter your name"
+              value={nameInput}
+              onChangeText={setNameInput}
+              autoFocus={true}
+              onSubmitEditing={handleNameSubmit}
+            />
+            
+            <TouchableOpacity style={styles.modalButton} onPress={handleNameSubmit}>
+              <Text style={styles.modalButtonText}>Let's Go! 🚀</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {cameraActive ? (
         <View style={styles.cameraContainer}>
           <CameraView 
@@ -194,7 +277,11 @@ export default function App() {
             
             <View style={styles.stickerPalette}>
               <Text style={styles.stickerTitle}>Tap to add stickers (long press to delete):</Text>
-              <View style={styles.stickerGrid}>
+              <ScrollView 
+                horizontal
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.stickerScrollContent}
+              >
                 {availableStickers.map((emoji, index) => (
                   <TouchableOpacity 
                     key={index}
@@ -204,7 +291,7 @@ export default function App() {
                     <Text style={styles.stickerOptionEmoji}>{emoji}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             </View>
           </ScrollView>
           
@@ -219,7 +306,36 @@ export default function App() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Text style={styles.title}>🦷 Hello Alphie! 🦷</Text>
+          <TouchableOpacity onPress={pickProfilePicture} style={styles.profilePictureContainer}>
+            {profilePicture ? (
+              <Image source={{ uri: profilePicture }} style={styles.profilePicture} />
+            ) : (
+              <View style={styles.profilePlaceholder}>
+                <Text style={styles.profilePlaceholderText}>👤</Text>
+                <Text style={styles.profilePlaceholderSubtext}>Tap to add photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.iconSelector}>
+            <Text style={styles.iconSelectorTitle}>Choose your icon:</Text>
+            <View style={styles.iconGrid}>
+              {availableIcons.map((icon) => (
+                <TouchableOpacity
+                  key={icon.emoji}
+                  style={[
+                    styles.iconOption,
+                    selectedIcon === icon.emoji && styles.iconOptionSelected,
+                  ]}
+                  onPress={() => setSelectedIcon(icon.emoji)}
+                >
+                  <Text style={styles.iconEmoji}>{icon.emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <Text style={styles.title}>{selectedIcon} Hello {userName}! {selectedIcon}</Text>
           <Text style={styles.subtitle}>Welcome to your first mobile app!</Text>
           
           <View style={styles.infoBox}>
@@ -235,17 +351,9 @@ export default function App() {
             <Text style={styles.buttonText}>📷 Open Camera</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.button} onPress={handlePress}>
-            <Text style={styles.buttonText}>Tap Me!</Text>
+          <TouchableOpacity style={styles.button} onPress={showInstructions}>
+            <Text style={styles.buttonText}>📋 Instructions</Text>
           </TouchableOpacity>
-
-          {clickCount > 0 && (
-            <View style={styles.counterBox}>
-              <Text style={styles.counterText}>
-                You've tapped {clickCount} time{clickCount !== 1 ? 's' : ''}!
-              </Text>
-            </View>
-          )}
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>
@@ -395,14 +503,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 15,
     padding: 15,
-    marginBottom: 80,
+    marginBottom: 20,
   },
   stickerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#2c5aa0',
-    marginBottom: 15,
+    marginBottom: 10,
     textAlign: 'center',
+  },
+  stickerScrollContent: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingRight: 10,
   },
   stickerGrid: {
     flexDirection: 'row',
@@ -475,5 +588,135 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  profilePictureContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  profilePicture: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#2196F3',
+  },
+  profilePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#e6f2ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#2196F3',
+    borderStyle: 'dashed',
+  },
+  profilePlaceholderText: {
+    fontSize: 50,
+  },
+  profilePlaceholderSubtext: {
+    fontSize: 12,
+    color: '#2196F3',
+    marginTop: 5,
+    fontWeight: '600',
+  },
+  iconSelector: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20,
+    width: '100%',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+  },
+  iconSelectorTitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 10,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  iconOption: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  iconOptionSelected: {
+    backgroundColor: '#e6f2ff',
+    borderColor: '#2196F3',
+  },
+  iconEmoji: {
+    fontSize: 30,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    width: '85%',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#2c5aa0',
+    marginBottom: 10,
+  },
+  modalSubtitle: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 20,
+  },
+  nameInput: {
+    width: '100%',
+    borderWidth: 2,
+    borderColor: '#2196F3',
+    borderRadius: 15,
+    padding: 15,
+    fontSize: 18,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 40,
+    paddingVertical: 15,
+    borderRadius: 25,
+    elevation: 3,
+  },
+  modalButtonText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
 });
